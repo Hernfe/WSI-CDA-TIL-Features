@@ -1,0 +1,4 @@
+slide_id,cell_x,cell_y,raw_class,cell_class,cell_area_px,cell_area_um2
+example_slide_002,5000,3000,Immune cells,immune,80.0,3.87
+example_slide_002,5200,3100,Tumor,tumor_cell,125.0,6.05
+example_slide_002,5400,3200,Immune cells,immune,77.5,3.75

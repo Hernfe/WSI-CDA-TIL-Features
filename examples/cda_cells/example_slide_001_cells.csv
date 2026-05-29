@@ -1,0 +1,9 @@
+slide_id,cell_x,cell_y,raw_class,cell_class,cell_area_px,cell_area_um2
+example_slide_001,12345,6789,Immune cells,immune,84.2,4.07
+example_slide_001,12500,6900,Immune cells,immune,91.0,4.40
+example_slide_001,13100,7200,Tumor,tumor_cell,120.5,5.83
+example_slide_001,13300,7300,Tumor,tumor_cell,115.0,5.56
+example_slide_001,13500,7100,Immune cells,immune,78.3,3.79
+example_slide_001,14000,7500,Tumor,tumor_cell,130.2,6.29
+example_slide_001,14200,7600,Immune cells,immune,85.0,4.11
+example_slide_001,14400,7700,Tumor,tumor_cell,118.0,5.71

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wsi-cda-til-features"
+version = "0.1.0"
+description = "QuPath/CDA TIL feature extraction for WSI tumor ROIs"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = ["pathology", "whole-slide-image", "TIL", "CDA", "QuPath", "feature-extraction"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Intended Audience :: Science/Research",
+    "Development Status :: 3 - Alpha",
+]
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "scikit-learn>=1.3",
+    "pyarrow>=12.0",
+]
+
+[project.optional-dependencies]
+geojson = ["shapely>=2.0", "geopandas>=0.14"]
+openslide = ["openslide-python>=1.3"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "shapely>=2.0",
+]
+
+[project.scripts]
+wsi-cda-til = "wsi_cda_til_features.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"

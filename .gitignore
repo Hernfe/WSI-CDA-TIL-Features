@@ -1,0 +1,59 @@
+# WSI and large binary formats
+*.mrxs
+*.svs
+*.ndpi
+*.tif
+*.tiff
+*.h5
+*.hdf5
+
+# Columnar / archive outputs
+*.parquet
+*.log
+*.tar
+*.tar.gz
+*.gz
+*.zip
+
+# Output directories
+output/
+data/
+cda/
+overlays/
+slide_features/
+qc_exports/
+qc_coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Testing / tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Claude Code
+.claude/
+
+# Environment
+.env
+.venv
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

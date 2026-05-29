@@ -1,0 +1,7 @@
+x,y,predicted_class,confidence,is_tumor
+4928,2912,Tumor,0.91,True
+5152,2912,Tumor,0.87,True
+5376,2912,Tumor,0.83,True
+4928,3136,Tumor,0.90,True
+5152,3136,Tumor,0.85,True
+5376,3136,Tumor,0.81,True

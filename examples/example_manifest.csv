@@ -1,0 +1,3 @@
+slide_id,wsi_path,roi_geojson,tumor_grid
+example_slide_001,/path/to/slides/example_slide_001.mrxs,examples/roi_masks/example_slide_001_selected_cdaroi_stage5b.geojson,examples/tumor_grids/example_slide_001_selected_tumorgrid_stage5b.csv
+example_slide_002,/path/to/slides/example_slide_002.mrxs,examples/roi_masks/example_slide_002_selected_cdaroi_stage5b.geojson,examples/tumor_grids/example_slide_002_selected_tumorgrid_stage5b.csv
