@@ -13,7 +13,7 @@ and engineered TIL / spatial feature extraction for whole-slide images.
 ## Overview
 
 This tool follows the
-[wsi-prototype-tumor-masker](https://github.com/your-org/wsi-prototype-tumor-masker)
+[wsi-prototype-tumor-masker](https://github.com/Hernfe/WSI-Prototype-Tumor-Masker)
 pipeline. The masker outputs selected tumor ROI masks — preferably
 refined stage5b masks named:
 
@@ -80,11 +80,12 @@ Results are written to `/path/to/output/slide_features/final_features.csv`.
 ### Prerequisites
 
 - [QuPath](https://qupath.github.io) ≥ 0.5 installed and executable from CLI
-- The ANN-MLP object classifier and pixel classifier from
+- The ANN-MLP object classifier and (optionally) the pixel classifier from
   [tznaung/Mel_Color_Norm-CellDetection](https://github.com/tznaung/Mel_Color_Norm-CellDetection)
-  (saved as `.json` files)
+  (saved as `.json` files from your own local CDA/QuPath setup —
+  **these are not bundled in this repository**)
 - Tumor ROI GeoJSON masks from
-  [wsi-prototype-tumor-masker](https://github.com/your-org/wsi-prototype-tumor-masker)
+  [wsi-prototype-tumor-masker](https://github.com/Hernfe/WSI-Prototype-Tumor-Masker)
 
 ### Single-slide dry-run
 

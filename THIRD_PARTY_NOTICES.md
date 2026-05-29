@@ -27,6 +27,13 @@ upstream CDA repository:
     (Immune cells, Tumor, Stroma, Other)
   - Tissue-wrapping pixel classifier architecture
 
+  **Note:** classifier asset files (trained model weights) are **not** bundled
+  in this repository. Users must obtain them from the upstream CDA repository
+  and supply the paths via `object_classifier_path` and `pixel_classifier_path`
+  arguments. If `object_classifier_path` is omitted, the script may attempt to
+  use a user-configured QuPath project classifier named `ANN_MLP_sep24`, but
+  this is not provided here and should not be relied on for reproducibility.
+
 **Upstream MIT License:**
 
 ```
@@ -102,7 +109,7 @@ The wsi-cda-til-features codebase adds:
 
 1. QuPath batch automation and CLI argument handling (no embedded private paths)
 2. ROI-restricted CDA execution using stage5b GeoJSON masks from
-   [wsi-prototype-tumor-masker](https://github.com/your-org/wsi-prototype-tumor-masker)
+   [wsi-prototype-tumor-masker](https://github.com/Hernfe/WSI-Prototype-Tumor-Masker)
 3. Cell centroid-to-tumor-patch overlay computation
 4. Engineered TIL density, spatial dispersion, section, satellite, and
    component-geometry features

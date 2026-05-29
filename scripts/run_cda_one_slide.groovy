@@ -35,11 +35,12 @@
 //   pixel_classifier_path   path to .json pixel classifier for tissue trimming
 //                           (obtain from tznaung/Mel_Color_Norm-CellDetection)
 //
-// NOTE: When object_classifier_path or pixel_classifier_path are not supplied,
-// the script attempts to use embedded fallback classifiers.  The embedded
-// classifiers are derived from the upstream MIT-licensed CDA repository; see
-// THIRD_PARTY_NOTICES.md.  For reproducibility we strongly recommend
-// supplying explicit classifier paths from the upstream repository.
+// NOTE: Classifier assets are not bundled in this repository.
+// Provide object_classifier_path (and optionally pixel_classifier_path) from
+// your own local CDA/QuPath setup (obtain from tznaung/Mel_Color_Norm-CellDetection).
+// If object_classifier_path is omitted, the script may attempt to use a
+// user-configured QuPath project classifier named ANN_MLP_sep24, but this
+// classifier is not bundled here and should not be relied on for reproducibility.
 //
 // Example invocation:
 //   QuPath script \
