@@ -14,24 +14,30 @@ and engineered TIL / spatial feature extraction for whole-slide images.
 
 This tool follows the
 [wsi-prototype-tumor-masker](https://github.com/Hernfe/WSI-Prototype-Tumor-Masker)
-pipeline. The masker outputs selected tumor ROI masks — preferably
-refined stage5b masks named:
+pipeline. The masker outputs two GeoJSON files per slide:
 
 ```
-{slide_id}_selected_cdaroi_stage5b.geojson
+{slide_id}_core.geojson       — selected tumor ROI (intratumoral / TIL analysis)
+{slide_id}_peritumor.geojson  — CDA analysis ROI (core + ~300 µm surrounding band)
 ```
+
+**Terminology:** TIL (tumor-infiltrating leukocyte) refers only to leukocytes
+inside the core tumor mask.  Immune cells outside the core but inside the
+peritumoral band are called **peritumoral leukocytes** or **peritumoral immune
+cells** — not TILs.
 
 This extension then:
 
 1. **`run-cda`** — launches QuPath with a Groovy wrapper to run CDA cell
-   detection inside those ROIs, writing compact cell CSVs and optional
-   detection GeoJSONs.
-2. **`overlay`** — maps CDA cell centroids onto tumor patch grids
-   (`{slide_id}_selected_tumorgrid_stage5b.parquet` or CSV), counting
-   immune and tumor cells per patch and marking peritumoral zones.
-3. **`extract-features`** — reads overlay outputs and optional
-   component-selection metadata, then writes a final
-   `slide_features/final_features.csv`.
+   detection inside ``{slide_id}_peritumor.geojson``, writing compact cell
+   CSVs and optional detection GeoJSONs.
+2. **`overlay`** — maps CDA cell centroids onto tumor patch grids.
+   Core counts come from patch-level assignment.  Total counts come from the
+   cells CSV (CDA ran on the peritumor ROI).
+   Ring counts = total − core.  Geometry from core/peritumor GeoJSONs is used
+   for area calculations only.
+3. **`extract-features`** — reads overlay outputs and region summaries, then
+   writes a final ``slide_features/final_features.csv``.
 4. **`run`** — convenience command that runs all three stages in sequence.
 
 The underlying cell-detection algorithm is
@@ -92,8 +98,8 @@ Results are written to `/path/to/output/slide_features/final_features.csv`.
 ```bash
 wsi-cda-til run-cda \
   --slides       /path/to/slides/ \
-  --roi-masks    /path/to/roi_masks/ \
-  --qupath-bin   /path/to/QuPath/bin/QuPath \
+  --roi-masks    /path/to/roi_masks/   # directory containing *_peritumor.geojson files \
+  --qupath-bin   $QUPATH_BIN \
   --groovy-script scripts/run_cda_one_slide.groovy \
   --object-classifier /path/to/ANN_MLP_sep24.json \
   --pixel-classifier  /path/to/pixel_classifier.json \
@@ -107,7 +113,7 @@ wsi-cda-til run-cda \
 wsi-cda-til run \
   --manifest     examples/example_manifest.csv \
   --tumor-grids  /path/to/tumor_grids/ \
-  --qupath-bin   /path/to/QuPath/bin/QuPath \
+  --qupath-bin   $QUPATH_BIN \
   --groovy-script scripts/run_cda_one_slide.groovy \
   --output       /path/to/output/
 ```
@@ -118,14 +124,16 @@ wsi-cda-til run \
 
 | File | Default pattern |
 |------|----------------|
-| Tumor ROI mask | `{slide_id}_selected_cdaroi_stage5b.geojson` |
+| Peritumor mask (CDA input) | `{slide_id}_peritumor.geojson` |
+| Core tumor mask | `{slide_id}_core.geojson` |
 | Tumor grid | `{slide_id}_selected_tumorgrid_stage5b.parquet` |
 | CDA cells CSV | `{slide_id}_cells.csv` |
 | Overlay output | `{slide_id}_overlay.parquet` |
+| Region summary | `{slide_id}_region_summary.json` |
 | Component selection | `{slide_id}_component_selection_stage5b.json` |
 
-All patterns can be overridden via `--roi-pattern`, `--tumor-grid-pattern`,
-`--cells-pattern`, and `--component-pattern` flags.
+All patterns can be overridden via `--roi-pattern`, `--core-pattern`,
+`--tumor-grid-pattern`, `--cells-pattern`, and `--component-pattern` flags.
 
 ---
 
@@ -135,7 +143,7 @@ You can supply a manifest CSV instead of scanning directories:
 
 ```csv
 slide_id,wsi_path,roi_geojson,tumor_grid
-example_slide_001,/slides/example_slide_001.mrxs,/masks/example_slide_001_selected_cdaroi_stage5b.geojson,/grids/example_slide_001_selected_tumorgrid_stage5b.parquet
+example_slide_001,/slides/example_slide_001.mrxs,/masks/example_slide_001_peritumor.geojson,/grids/example_slide_001_tumorgrid.parquet
 ```
 
 Required column: `slide_id`.  
@@ -159,15 +167,24 @@ The `extract-features` command produces one row per slide in `final_features.csv
 | `tumor_area_mm2` | Tumor area (patch count × patch area) |
 | `total_cda_immune_cells` | Total immune cells across slide |
 | `total_cda_tumor_cells` | Total tumor cells across slide |
-| `mean_intratumoral_til_count_per_patch` | Mean immune cells per tumor patch |
-| `max_intratumoral_til_count_per_patch` | Max immune cells in a single tumor patch |
-| `mean_intratumoral_til_density_per_mm2` | Mean immune cell density (tumor patches) |
-| `max_intratumoral_til_density_per_mm2` | Max immune cell density (tumor patches) |
-| `mean_tumor_cell_density_per_mm2` | Mean tumor cell density (tumor patches) |
-| `fraction_tumor_patches_til_count_ge_5` | Fraction of tumor patches with ≥5 immune cells |
+| `mean_intratumoral_til_count_per_patch` | Mean TIL count per tumor patch (core only) |
+| `max_intratumoral_til_count_per_patch` | Max TIL count in a single tumor patch |
+| `mean_intratumoral_til_density_per_mm2` | Mean TIL density (core patches, cells/mm²) |
+| `max_intratumoral_til_density_per_mm2` | Max TIL density (core patches) |
+| `mean_tumor_cell_density_per_mm2` | Mean tumor cell density (core patches) |
+| `fraction_tumor_patches_til_count_ge_5` | Fraction of core patches with ≥5 TILs |
 | `fraction_tumor_patches_til_count_ge_15` | Fraction with ≥15 |
 | `fraction_tumor_patches_til_count_ge_30` | Fraction with ≥30 |
-| `peritumoral_til_density_per_mm2` | Immune density in peritumoral zone (NaN if absent) |
+| `peritumoral_leukocyte_count` | Immune cells in the peritumoral ring (total minus core; NaN if no region summary) |
+| `peritumoral_leukocyte_density_per_mm2` | Peritumoral leukocyte density (cells/mm²; NaN if absent) |
+| `peritumoral_immune_cell_count` | Alias for peritumoral_leukocyte_count |
+| `peritumoral_immune_cell_density_per_mm2` | Alias for peritumoral_leukocyte_density_per_mm2 |
+| `peritumoral_ring_area_mm2` | Ring area (peritumor minus core, mm²; NaN if absent) |
+| `peritumoral_ring_patch_count` | Approximate patch count in the ring |
+
+> **Note:** "TIL" (tumor-infiltrating leukocyte) refers only to leukocytes
+> inside the core tumor mask.  Immune cells in the peritumoral ring are called
+> peritumoral leukocytes or peritumoral immune cells, not TILs.
 | `n_sections` | Number of DBSCAN-detected tumor tissue sections |
 | `multi_section_flag` | True when >1 section detected |
 | `max_inter_section_distance_px` | Max centroid distance between sections |
@@ -206,8 +223,8 @@ Component-selection metadata (when `--component-json` is provided):
   extracted features before drawing any scientific conclusions.
 - Stroma and Other CDA classes have lower precision in our usage;
   they are excluded from default feature extraction.
-- Peritumoral TIL density is NaN when the overlay contains no
-  non-tumor patches (the normal case after stage5b ROI selection).
+- Peritumoral leukocyte density is NaN when no region summary JSON was produced
+  by the overlay step (e.g. when core/peritumor GeoJSON paths were not provided).
 
 ---
 

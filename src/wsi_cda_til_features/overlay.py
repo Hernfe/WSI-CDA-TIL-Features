@@ -1,12 +1,20 @@
-"""Map CDA cell centroids onto tumor patch grids.
+"""Map CDA cell centroids onto tumor patch grids and compute region summaries.
 
-Adapted from the internal stage6_overlay.py (originally written for the
-wsi-cda-til-features project). Generalised to work from file paths and
-explicit config values rather than the private config module.
+Cell assignment logic:
+  Core counts  — CDA cells assigned to the selected tumor patch grid
+                 (patch-level assignment via coordinate lookup).
+  Total counts — all immune + tumor-cell rows in the cells CSV, which was
+                 produced by running CDA on the peritumor ROI.
+  Ring counts  — ring_immune = total_immune - core_immune
+                 ring_tumor_cell = total_tumor_cell - core_tumor_cell
+
+Geometry (loaded from core.geojson / peritumor.geojson) is used only for
+area calculations.  The ring area is computed as peritumor.difference(core).
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -94,12 +102,17 @@ def assign_cells_to_patches(
 
 
 # ---------------------------------------------------------------------------
-# Peritumor marking
+# Peritumor patch marking (KDTree — kept for QC and backward compatibility)
 # ---------------------------------------------------------------------------
 
 
 def mark_peritumor_patches(df: pd.DataFrame, radius_px: int) -> pd.Series:
-    """Mark non-tumor patches within radius_px of any tumor patch centre."""
+    """Mark non-tumor patches within radius_px of any tumor patch centre.
+
+    Note: this KDTree-based column is for QC and visualisation.  Peritumoral
+    immune-cell counts for feature extraction are computed from the region
+    summary (total counts minus core counts), not from this column.
+    """
     false_series = pd.Series(False, index=df.index)
     if radius_px <= 0 or not df["is_tumor"].any():
         return false_series
@@ -108,7 +121,7 @@ def mark_peritumor_patches(df: pd.DataFrame, radius_px: int) -> pd.Series:
         from sklearn.neighbors import KDTree
     except ImportError:
         print(
-            "  scikit-learn not available; peritumor labels set to False",
+            "  scikit-learn not available; is_peritumor_patch set to False",
             file=sys.stderr,
         )
         return false_series
@@ -126,6 +139,17 @@ def mark_peritumor_patches(df: pd.DataFrame, radius_px: int) -> pd.Series:
 
 
 # ---------------------------------------------------------------------------
+# Geometry area helpers
+# ---------------------------------------------------------------------------
+
+
+def _geom_area_mm2(geom, pixel_size_microns: float) -> float:
+    if geom is None or geom.is_empty:
+        return 0.0
+    return float(geom.area) * (pixel_size_microns / 1000.0) ** 2
+
+
+# ---------------------------------------------------------------------------
 # Main overlay function
 # ---------------------------------------------------------------------------
 
@@ -140,8 +164,10 @@ def run_overlay(
     pixel_size_microns: float = cfg.PIXEL_SIZE_MICRONS,
     dilation_radius_um: float = cfg.DILATION_RADIUS_UM,
     use_geojson_fallback: bool = False,
+    core_geojson_path: Path | None = None,
+    peritumor_geojson_path: Path | None = None,
 ) -> pd.DataFrame:
-    """Overlay CDA cells onto the tumor grid and write output_path.
+    """Overlay CDA cells onto the tumor grid, compute region summary, write output.
 
     Parameters
     ----------
@@ -160,11 +186,18 @@ def run_overlay(
     pixel_size_microns:
         Pixel size in microns at level 0.
     dilation_radius_um:
-        Peritumor band radius in microns.
+        Peritumor band radius in microns (used for KDTree QC column only when
+        core_geojson_path / peritumor_geojson_path are not supplied).
     use_geojson_fallback:
         If True, load cells from GeoJSON instead of CSV.
+    core_geojson_path:
+        Path to {slide_id}_core.geojson for geometry-based area calculations.
+    peritumor_geojson_path:
+        Path to {slide_id}_peritumor.geojson.  CDA should have been run on
+        this ROI; total cell counts are taken from the cells CSV.
     """
     from .cda_io import load_cells_csv, load_cells_geojson, read_wsi_offsets
+    from .roi import load_core_geojson, load_peritumor_geojson
 
     print(f"=== overlay: {slide_id} ===")
 
@@ -179,15 +212,18 @@ def run_overlay(
             x_off, y_off = read_wsi_offsets(wsi_path)
             print(f"  WSI offsets: X={x_off}, Y={y_off}")
         cells = load_cells_geojson(cells_path, x_offset=x_off, y_offset=y_off)
-        # GeoJSON coords are QuPath image-relative; offset applied inside
         cells["cell_x"] = cells["cell_x"] + x_off
         cells["cell_y"] = cells["cell_y"] + y_off
     else:
         cells = load_cells_csv(cells_path)
-        # cells CSV coordinates are QuPath slide-relative (no offset needed)
 
     print(f"  cells loaded: {len(cells)}")
 
+    # Total counts: all cells in the peritumor ROI (from the cells CSV/GeoJSON).
+    total_immune_count = int((cells["cell_class"] == "immune").sum())
+    total_tumor_cell_count = int((cells["cell_class"] == "tumor_cell").sum())
+
+    # Core counts: cells assigned to tumor patch grid patches.
     assigned = assign_cells_to_patches(cells, grid, patch_size)
 
     if not assigned.empty:
@@ -213,16 +249,54 @@ def run_overlay(
     grid["cda_immune_density_per_mm2"] = grid["cda_immune_count"] / patch_area
     grid["cda_tumor_cell_density_per_mm2"] = grid["cda_tumor_cell_count"] / patch_area
 
+    # KDTree peritumor column (QC/visualisation — not used for primary counts).
     radius_px = cfg.um_to_px(dilation_radius_um, pixel_size_microns)
     grid["is_peritumor_patch"] = mark_peritumor_patches(grid, radius_px)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     grid.to_parquet(output_path, index=False)
 
+    # Region summary: core and ring counts + geometry-based areas.
+    core_immune_count = int(grid["cda_immune_count"].sum())
+    core_tumor_cell_count = int(grid["cda_tumor_cell_count"].sum())
+    ring_immune_count = total_immune_count - core_immune_count
+    ring_tumor_cell_count = total_tumor_cell_count - core_tumor_cell_count
+
+    core_geom = load_core_geojson(core_geojson_path) if core_geojson_path else None
+    peri_geom = load_peritumor_geojson(peritumor_geojson_path) if peritumor_geojson_path else None
+
+    core_area_mm2 = _geom_area_mm2(core_geom, pixel_size_microns)
+    peritumor_area_mm2 = _geom_area_mm2(peri_geom, pixel_size_microns)
+    if peri_geom is not None and core_geom is not None:
+        ring_area_mm2 = _geom_area_mm2(peri_geom.difference(core_geom), pixel_size_microns)
+    else:
+        ring_area_mm2 = peritumor_area_mm2 - core_area_mm2
+
+    region_summary = {
+        "slide_id":              slide_id,
+        "core_immune_count":     core_immune_count,
+        "core_tumor_cell_count": core_tumor_cell_count,
+        "ring_immune_count":     ring_immune_count,
+        "ring_tumor_cell_count": ring_tumor_cell_count,
+        "unassigned_cell_count": 0,
+        "core_area_mm2":         round(core_area_mm2, 6),
+        "peritumor_area_mm2":    round(peritumor_area_mm2, 6),
+        "ring_area_mm2":         round(ring_area_mm2, 6),
+        "cda_roi_used":          str(peritumor_geojson_path) if peritumor_geojson_path else None,
+    }
+
+    summary_path = output_path.with_name(
+        output_path.name.replace("_overlay.parquet", "_region_summary.json")
+    )
+    summary_path.write_text(json.dumps(region_summary, indent=2))
+
     print(f"  tumor patches:    {int(grid['is_tumor'].sum())}")
     print(f"  peritumor patches:{int(grid['is_peritumor_patch'].sum())}")
-    print(f"  immune cells assigned: {int(grid['cda_immune_count'].sum())}")
-    print(f"  tumor cells assigned:  {int(grid['cda_tumor_cell_count'].sum())}")
+    print(f"  core immune cells:   {core_immune_count}")
+    print(f"  ring immune cells:   {ring_immune_count}")
+    print(f"  core area (mm2):  {core_area_mm2:.4f}")
+    print(f"  ring area (mm2):  {ring_area_mm2:.4f}")
     print(f"  wrote: {output_path}")
+    print(f"  wrote: {summary_path}")
     print(f"=== done: {slide_id} ===")
     return grid

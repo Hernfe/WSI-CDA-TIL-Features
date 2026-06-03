@@ -1,4 +1,4 @@
-"""Load and inspect tumor ROI GeoJSON masks (stage5b output)."""
+"""Load and inspect tumor ROI GeoJSON masks produced by wsi-prototype-tumor-masker."""
 
 from __future__ import annotations
 
@@ -52,3 +52,44 @@ def validate_roi_geojson(path: Path) -> None:
         raise ValueError(f"Cannot read ROI GeoJSON {path}: {exc}") from exc
     if geojson_feature_count(data) == 0:
         raise ValueError(f"ROI GeoJSON has no features: {path}")
+
+
+def load_shapely_geometry(path: Path):
+    """Load a GeoJSON file and return a unified Shapely geometry, or None if absent/empty."""
+    if path is None or not path.exists():
+        return None
+    try:
+        from shapely.geometry import shape
+        from shapely.ops import unary_union
+    except ImportError:
+        return None
+    data = load_geojson(path)
+    features = (
+        data.get("features", [])
+        if data.get("type") == "FeatureCollection"
+        else [data]
+    )
+    geoms = [shape(f["geometry"]) for f in features if f.get("geometry")]
+    if not geoms:
+        return None
+    merged = unary_union(geoms)
+    return None if merged.is_empty else merged
+
+
+def load_core_geojson(path: Path):
+    """Load core.geojson and return a unified Shapely geometry, or None.
+
+    The core GeoJSON is the selected tumor ROI.  It is used for intratumoral
+    (TIL) analysis and for computing the area of the tumor core.
+    """
+    return load_shapely_geometry(path)
+
+
+def load_peritumor_geojson(path: Path):
+    """Load peritumor.geojson and return a unified Shapely geometry, or None.
+
+    The peritumor GeoJSON is the CDA input ROI.  It covers the tumor plus the
+    surrounding peritumoral band (default 300 µm).  The ring used for
+    peritumoral immune-cell counts is computed as ``peritumor − core``.
+    """
+    return load_shapely_geometry(path)

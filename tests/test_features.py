@@ -204,4 +204,4 @@ def test_qupath_command_construction():
     assert "cells_csv=" in cmd
     assert "export_geojson=false" in cmd
     assert "private" not in cmd.lower()
-    assert "/data/melanoma" not in cmd
+    assert "/private/cohort" not in cmd

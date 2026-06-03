@@ -81,8 +81,7 @@ def iter_rows(df: pd.DataFrame) -> Iterator[dict]:
 
 
 _PRIVATE_PATTERNS = re.compile(
-    r"/mnt/files|/data/melanoma|/mnt/melanoma|Blackstorm|FIMM|HUS"
-    r"|melanoma_selected_slides|final_features|qc_exports",
+    r"private|restricted|internal|cohort_specific",
     re.IGNORECASE,
 )
 

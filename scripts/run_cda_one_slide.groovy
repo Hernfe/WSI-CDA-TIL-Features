@@ -14,7 +14,9 @@
 //
 // This wrapper adds:
 //   - key=value CLI argument parsing (QuPath --args)
-//   - ROI import from a stage5b GeoJSON mask (output of wsi-prototype-tumor-masker)
+//   - ROI import from a peritumor GeoJSON mask ({slide_id}_peritumor.geojson,
+//     output of wsi-prototype-tumor-masker).  CDA runs inside this ROI, which
+//     covers the selected tumor and the surrounding peritumoral band (~300 µm).
 //   - compact cells CSV export (cell_x, cell_y, cell_class)
 //   - optional detection GeoJSON export
 //   - image-level measurement CSV append
@@ -23,7 +25,7 @@
 //
 // Required args (pass via QuPath --args key=value):
 //   slide_id           slide identifier string
-//   roi_geojson        path to stage5b CDA ROI GeoJSON (input)
+//   roi_geojson        path to {slide_id}_peritumor.geojson (CDA input ROI)
 //   measurements_csv   path to append image-level measurements CSV (output)
 //
 // Optional args:
@@ -46,7 +48,7 @@
 //   QuPath script \
 //     --image /path/to/slide.mrxs \
 //     --args slide_id=example_slide_001 \
-//     --args roi_geojson=/output/roi_masks/example_slide_001_selected_cdaroi_stage5b.geojson \
+//     --args roi_geojson=/output/roi_masks/example_slide_001_peritumor.geojson \
 //     --args cells_csv=/output/cda/example_slide_001_cells.csv \
 //     --args measurements_csv=/output/cda/measurements.csv \
 //     --args export_geojson=false \

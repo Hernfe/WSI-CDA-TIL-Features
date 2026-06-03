@@ -20,7 +20,8 @@ def run_pipeline(
     output_dir: Path,
     manifest_csv: Path | None = None,
     slide_ext: str = ".mrxs",
-    roi_pattern: str = "{slide_id}_selected_cdaroi_stage5b.geojson",
+    roi_pattern: str = "{slide_id}_peritumor.geojson",
+    core_geojson_pattern: str = "{slide_id}_core.geojson",
     tumor_grid_pattern: str = "{slide_id}_selected_tumorgrid_stage5b.parquet",
     cells_pattern: str = "{slide_id}_cells.csv",
     overlay_pattern: str = "{slide_id}_overlay.parquet",
@@ -115,6 +116,14 @@ def run_pipeline(
             overlay_failures.append(sid)
             continue
 
+        core_path = (
+            resolve_path(roi_masks_dir, core_geojson_pattern, sid)
+            if roi_masks_dir else None
+        )
+        peri_path = (
+            resolve_path(roi_masks_dir, roi_pattern, sid)
+            if roi_masks_dir else None
+        )
         try:
             run_overlay(
                 slide_id=sid,
@@ -123,6 +132,8 @@ def run_pipeline(
                 output_path=resolve_path(overlay_dir, overlay_pattern, sid),
                 patch_size=patch_size,
                 pixel_size_microns=pixel_size_microns,
+                core_geojson_path=core_path,
+                peritumor_geojson_path=peri_path,
             )
         except Exception as exc:
             print(f"  WARNING [{sid}] overlay failed: {exc}", file=sys.stderr)
@@ -137,6 +148,7 @@ def run_pipeline(
             overlay_pattern=overlay_pattern,
             component_json_dir=component_json_dir,
             component_pattern=component_pattern,
+            region_summary_dir=overlay_dir,
             measurements_csv=measurements_csv if measurements_csv.exists() else None,
             patch_size=patch_size,
             pixel_size_microns=pixel_size_microns,

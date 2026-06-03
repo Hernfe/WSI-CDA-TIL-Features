@@ -19,7 +19,7 @@ PIXEL_SIZE_MICRONS: float = float(os.environ.get("WSI_PIXEL_SIZE_MICRONS", "0.22
 # Peritumor dilation
 # ---------------------------------------------------------------------------
 
-DILATION_RADIUS_UM: float = float(os.environ.get("WSI_DILATION_RADIUS_UM", "200"))
+DILATION_RADIUS_UM: float = float(os.environ.get("WSI_DILATION_RADIUS_UM", "300"))
 
 # ---------------------------------------------------------------------------
 # DBSCAN section detection

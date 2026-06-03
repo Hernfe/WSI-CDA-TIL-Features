@@ -1,7 +1,14 @@
 """Extract slide-level engineered TIL / spatial features from overlay parquets.
 
-Adapted from the internal stage7_extract_final_features.py.  Dependency on the
-private config module has been removed; all parameters are passed explicitly.
+Terminology:
+  TIL (tumor-infiltrating leukocyte) — leukocytes inside the core tumor mask only.
+  Peritumoral leukocytes / peritumoral immune cells — immune cells in the
+      peritumoral ring (peritumor ROI minus core).  These are NOT called TILs.
+
+Intratumoral features use the ``is_tumor`` patches from the overlay parquet.
+Peritumoral counts come from the region summary JSON written by the overlay step:
+  ring_immune_count = total_immune_in_CDA_roi - core_immune_count
+  ring_area_mm2     = peritumor_area - core_area
 """
 
 from __future__ import annotations
@@ -250,6 +257,29 @@ def load_component_selection_metadata(json_path: Path) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Region summary (written by overlay step)
+# ---------------------------------------------------------------------------
+
+
+def load_region_summary(json_path: Path) -> dict[str, Any]:
+    """Read {slide_id}_region_summary.json. Returns {} if not found.
+
+    The region summary contains:
+      core_immune_count, core_tumor_cell_count  — cells assigned to tumor patches
+      ring_immune_count, ring_tumor_cell_count  — total minus core
+      core_area_mm2, peritumor_area_mm2, ring_area_mm2
+    """
+    if json_path is None or not json_path.exists():
+        return {}
+    try:
+        with open(json_path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        print(f"  warning: could not read region summary {json_path}: {exc}")
+        return {}
+
+
+# ---------------------------------------------------------------------------
 # CDA summary (slide-level measurements.csv)
 # ---------------------------------------------------------------------------
 
@@ -293,6 +323,7 @@ def extract_slide_features(
     slide_id: str,
     overlay_path: Path,
     component_json_path: Path | None = None,
+    region_summary_path: Path | None = None,
     wsi_filename: str | None = None,
     patch_size: int = cfg.PATCH_SIZE,
     pixel_size_microns: float = cfg.PIXEL_SIZE_MICRONS,
@@ -311,11 +342,6 @@ def extract_slide_features(
     overlay["y"] = overlay["y"].astype(int)
 
     tumor = overlay[overlay["is_tumor"]].copy()
-    peri = (
-        overlay[overlay["is_peritumor_patch"].astype(bool)]
-        if "is_peritumor_patch" in overlay.columns
-        else pd.DataFrame()
-    )
 
     patch_area = ((patch_size * pixel_size_microns) / 1000.0) ** 2
 
@@ -324,7 +350,6 @@ def extract_slide_features(
         "wsi_filename":          wsi_filename or "",
         "patch_count_total":     int(len(overlay)),
         "patch_count_tumor":     int(len(tumor)),
-        "patch_count_peritumor": int(len(peri)),
         "tumor_area_mm2":        float(len(tumor) * patch_area),
         "total_cda_immune_cells": int(overlay["cda_immune_count"].sum()),
         "total_cda_tumor_cells":  int(overlay["cda_tumor_cell_count"].sum()),
@@ -332,17 +357,26 @@ def extract_slide_features(
 
     if tumor.empty:
         row.update({
+            "til_count":                             0,
+            "til_density_per_mm2":                   np.nan,
+            "intratumoral_leukocyte_count":          0,
+            "intratumoral_leukocyte_density_per_mm2": np.nan,
             "mean_intratumoral_til_count_per_patch":  np.nan,
             "max_intratumoral_til_count_per_patch":   np.nan,
             "mean_intratumoral_til_density_per_mm2":  np.nan,
             "max_intratumoral_til_density_per_mm2":   np.nan,
             "mean_tumor_cell_density_per_mm2":        np.nan,
-            "peritumoral_til_density_per_mm2":        np.nan,
         })
         for thr in til_thresholds:
             row[f"fraction_tumor_patches_til_count_ge_{thr}"] = np.nan
     else:
+        core_area_mm2 = float(len(tumor) * patch_area)
+        til_count = int(tumor["cda_immune_count"].sum())
         row.update({
+            "til_count":                             til_count,
+            "til_density_per_mm2":                   til_count / core_area_mm2 if core_area_mm2 > 0 else np.nan,
+            "intratumoral_leukocyte_count":          til_count,
+            "intratumoral_leukocyte_density_per_mm2": til_count / core_area_mm2 if core_area_mm2 > 0 else np.nan,
             "mean_intratumoral_til_count_per_patch":
                 float(tumor["cda_immune_count"].mean()),
             "max_intratumoral_til_count_per_patch":
@@ -358,10 +392,31 @@ def extract_slide_features(
             row[f"fraction_tumor_patches_til_count_ge_{thr}"] = float(
                 (tumor["cda_immune_count"] >= thr).mean()
             )
-        row["peritumoral_til_density_per_mm2"] = (
-            np.nan if peri.empty
-            else float(peri["cda_immune_count"].sum() / (len(peri) * patch_area))
-        )
+
+    # Peritumoral features from region summary (ring = peritumor ROI minus core).
+    rs = load_region_summary(region_summary_path) if region_summary_path else {}
+    ring_area_mm2 = float(rs.get("ring_area_mm2") or 0.0)
+    ring_immune = rs.get("ring_immune_count")
+    ring_tumor_cell = rs.get("ring_tumor_cell_count")
+
+    if ring_area_mm2 > 0 and ring_immune is not None:
+        peri_leuk_count = int(ring_immune)
+        peri_leuk_density = peri_leuk_count / ring_area_mm2
+    else:
+        peri_leuk_count = int(ring_immune) if ring_immune is not None else None
+        peri_leuk_density = np.nan
+
+    row.update({
+        "peritumoral_leukocyte_count":
+            peri_leuk_count if peri_leuk_count is not None else np.nan,
+        "peritumoral_leukocyte_density_per_mm2": peri_leuk_density,
+        "peritumoral_immune_cell_count":
+            peri_leuk_count if peri_leuk_count is not None else np.nan,
+        "peritumoral_immune_cell_density_per_mm2": peri_leuk_density,
+        "peritumoral_ring_area_mm2": ring_area_mm2 if ring_area_mm2 > 0 else np.nan,
+        "peritumoral_ring_patch_count":
+            round(ring_area_mm2 / patch_area) if ring_area_mm2 > 0 else np.nan,
+    })
 
     detect_kwargs = dict(patch_size=patch_size, pixel_size=pixel_size_microns)
     row.update(section_features(tumor, patch_area=patch_area, **detect_kwargs))
@@ -385,6 +440,8 @@ def extract_features_batch(
     overlay_pattern: str = "{slide_id}_overlay.parquet",
     component_json_dir: Path | None = None,
     component_pattern: str = "{slide_id}_component_selection_stage5b.json",
+    region_summary_dir: Path | None = None,
+    region_summary_pattern: str = "{slide_id}_region_summary.json",
     measurements_csv: Path | None = None,
     wsi_filenames: dict[str, str] | None = None,
     patch_size: int = cfg.PATCH_SIZE,
@@ -398,6 +455,9 @@ def extract_features_batch(
         else pd.DataFrame(columns=["slide_id"])
     )
 
+    # Default region_summary_dir to overlay_dir (overlay writes summary alongside parquet).
+    _summary_dir = region_summary_dir if region_summary_dir is not None else overlay_dir
+
     rows: list[dict] = []
     skipped: list[str] = []
 
@@ -408,12 +468,14 @@ def extract_features_batch(
             if component_json_dir is not None
             else None
         )
+        summary_path = resolve_path(_summary_dir, region_summary_pattern, slide_id)
         wsi_fn = (wsi_filenames or {}).get(slide_id)
         try:
             r = extract_slide_features(
                 slide_id=slide_id,
                 overlay_path=overlay_path,
                 component_json_path=comp_path,
+                region_summary_path=summary_path,
                 wsi_filename=wsi_fn,
                 patch_size=patch_size,
                 pixel_size_microns=pixel_size_microns,

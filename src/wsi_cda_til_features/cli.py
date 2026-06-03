@@ -221,6 +221,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         manifest_csv=Path(args.manifest) if args.manifest else None,
         slide_ext=args.slide_ext,
         roi_pattern=args.roi_pattern,
+        core_geojson_pattern=getattr(args, "core_pattern", "{slide_id}_core.geojson"),
         tumor_grid_pattern=args.tumor_grid_pattern,
         export_geojson=args.export_geojson,
         force=args.force,
@@ -243,10 +244,16 @@ def _add_common_io_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--manifest", metavar="CSV",
                    help="manifest CSV with columns: slide_id, wsi_path, roi_geojson [, tumor_grid]")
     p.add_argument("--roi-masks", metavar="DIR",
-                   help="directory containing ROI mask GeoJSON files")
+                   help="directory containing peritumor GeoJSON files "
+                        "(output of wsi-prototype-tumor-masker)")
     p.add_argument("--roi-pattern",
-                   default="{slide_id}_selected_cdaroi_stage5b.geojson",
-                   help="filename pattern for ROI masks (default: %(default)s)")
+                   default="{slide_id}_peritumor.geojson",
+                   help="filename pattern for peritumor masks (default: %(default)s).  "
+                        "CDA should have run on these ROIs.")
+    p.add_argument("--core-pattern",
+                   default="{slide_id}_core.geojson",
+                   help="filename pattern for core tumor masks (default: %(default)s).  "
+                        "Used for geometry-based area calculations.")
     p.add_argument("--output", required=True, metavar="DIR",
                    help="root output directory")
 
@@ -295,6 +302,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_ov.add_argument("--output", required=True, metavar="DIR",
                       help="root output directory")
     p_ov.add_argument("--manifest", metavar="CSV")
+    p_ov.add_argument("--core-pattern",
+                      default="{slide_id}_core.geojson",
+                      help="filename pattern for core tumor masks (default: %(default)s)")
     p_ov.add_argument("--tumor-grid-pattern",
                       default="{slide_id}_selected_tumorgrid_stage5b.parquet",
                       help="filename pattern for tumor grids (default: %(default)s)")
@@ -302,7 +312,8 @@ def build_parser() -> argparse.ArgumentParser:
                       default="{slide_id}_cells.csv",
                       help="filename pattern for cells CSVs (default: %(default)s)")
     p_ov.add_argument("--roi-pattern",
-                      default="{slide_id}_selected_cdaroi_stage5b.geojson")
+                      default="{slide_id}_peritumor.geojson",
+                      help="filename pattern for peritumor GeoJSON masks (default: %(default)s)")
 
     # ---- extract-features ----
     p_fe = sub.add_parser("extract-features",

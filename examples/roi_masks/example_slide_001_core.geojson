@@ -1,0 +1,47 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "objectType": "annotation",
+        "classification": {
+          "name": "Core",
+          "colorRGB": -3670016,
+          "color": [
+            200,
+            0,
+            0
+          ]
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              12000,
+              6500
+            ],
+            [
+              15000,
+              6500
+            ],
+            [
+              15000,
+              8000
+            ],
+            [
+              12000,
+              8000
+            ],
+            [
+              12000,
+              6500
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
